@@ -1,3 +1,7 @@
 /.quarto/
 **/*.quarto_ipynb
+
+.venv/
+__pycache__/
+
 api_access.py
