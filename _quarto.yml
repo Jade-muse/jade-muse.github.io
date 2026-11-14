@@ -9,10 +9,8 @@ website:
       - href: index.qmd
         text: Home
       - about.qmd
-      - href: projects\bayesian_tutorial.qmd
-        text: Bayesian Methods in Python
-      - href: projects\pokemon_api_analysis.qmd
-        text: A Pokemon Analysis
+      - projects\bayesian_tutorial.qmd
+      - projects\pokemon_api_analysis.qmd
 
 format:
   html:
