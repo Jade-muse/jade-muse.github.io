@@ -1,0 +1,190 @@
+---
+title: "An Analysis of the Absurd World of Pokemon"
+author: "Dallin Anderson"
+format: html
+---
+```{python}
+import pandas as pd
+import plotly.express as px
+
+pokeDex = pd.read_csv(
+    "../data/pokemon_dex_data.csv"
+)
+```
+
+
+# Introduction
+Pokemon is a very interesting world, captivating the minds of children young and old. Yes, I said that correctly. Many adults are still caught in the original wonder of the franchise and spend countless hours mulling over its intracacies. And yet, their contemplation has revealed many inconsistencies as well. Numerous YouTube videos have compiled Pokemon descriptions of terrorized humans or the kill counts of various species. I however am facinated by the world itself and how Pokemon interact with each other. 
+
+What inspired this foray into a data science look at the world was a YouTube short that weasled its way into my algorithm one day, which balked at the strange measurement system the Pokemon descriptions sometimes use to relate the strength of these creatures into real world terms. And what better measurement could there be than dump trucks! This lead me to question what these entries were, yet no reliable source summarized the information neatly. Thus today's dive into some of these odd descriptions of Pokemon, known in-world as dex entries.
+
+
+# What's Worth Learning?
+Now, one might question the merits of performing such an odd analysis, as the question that was posed is more of a fun fact than any topic worth exploring. Therefore let's braoden our horizons to some other data in Pokemon to better explore these dex entries. First, we'll obtain a metric of a pocket monster's power by recording their base stat totals, a numeric representation of their health, offense, and defensive abilities. With this we can refine our dump truck mentions to a comparison of Pokemon strength overall and those that include dump trucks as a measurement of strength. If those that reference this dubious measurement maintain a low bst, then perhaps this creatures are far more powerful than we expect. Conversely, mentions in a high bst range would constitute these creatures as being far weaker, since if the extent of their power is limited to to that of a dump truck, surely a bomb is more powerful!
+
+Second, let's add in a few other metrics on the topic I quite enjoy: the ecology of the Pokemon world. Specifically let's focus on which Pokemon are hunted and which are the hunters. We can determine this with a count of dex entries that mention words synonimous with eating, a count of a pokemon appearing in another dex entry, and their individual bsts. For example, if a pokemon is mentioned in other descriptions and has a high bst, we could infer it is a hunter and those with low bst as prey. Pair this information with a number of dex entries by that particular pokemon involving some eating activity and we can narrow our assessment. 
+
+But Dallin, why can we not go hunting for this information on our own? Well, across the 30 years that Pokemon has been around, it has released 40 different mainline titles and 1024 different pokemon. For a normal person, that means hunting through at most 40960 entries to find this data. The actual count is smaller due to newer pokemon not being released in older games, but even accounting for that it's a lot of data to sift through. So, data collection through data science techniques is the way to go!
+
+# Ethics
+Now while we get ready to explore some of the absurd and possibly disturbing minutia in the Pokemon world, we must make sure our data is ethically and responsibly sourced. For this project I used the RESTful [PokeAPI](https://pokeapi.co/), an open source free API tool that contains nearly everything a person could want to know about Pokemon. Keeping in mind it being free to access, I imposed limits on the number of requests being sent to the API to 10 every second and verified my code was respectful of its pagination guidelines and other requirements. 
+
+
+# Data Collection Process
+Actually obtaining the data followed a series of general tasks. First, I used an example from the site itself to breach the normal 20 response limit to pull every pokemon they had in their database, storing the results from the request. From that data I pulled the name and "pokemon" endpoint url so that requests could be made to access every found pokemon's pages, extracting their base stats and totalling them for the dataset. The URL for the species was also stored in a list for a future loop and a dictionary for each pokemon was created. That dictionary of dictionaries was also cleaned to remove any of the different forms, since the species pages from which the dex entries would be drawn did not care about variants.
+
+Once the framework was ready, an additional loop sent requests to the species pages for each pokemon, where dex entries (referred to as flavor_text) were extracted and cleaned for odd spacing or special characters. Using regex to identify words for the mentions of trucks and eating, each description was analyzed before being appended as a single string in its own column. I should mention that the id of each species page was matched to the id stored in the first loop to best reference and assign values to their appropriate conditions.
+
+The last bit of data needed was the number of times each pokemon occurred in another pokemon's dex entry. Before running that data calculation we converted our dictionary into a pandas dataframe, performed the necessary calculation, and stored the new data. Then the completed dataset was stored as a csv file for distribution. 
+
+
+# EDA
+After processing, we end up with a 1024 x 7 dataframe containing a bunch of interesting data. Let's explore it shall we?
+```{python}
+pokeDex.head(10)
+```
+```{python}
+print(f"Mean Base Stat Total: {pokeDex['BST'].mean()}")
+```
+
+For those new to the field of Pokemon research, let me explain a bit of what is displayed here. First, the NationalDex_ID is essentially the index of this data. We won't really use it. Name is obvious and the bst is recorded. There are however 3 count columns. Truck_Mention is a count of how many entries of that particular pokemon mention some kind of truck. Food_Mention is similar. Dex_Mention is the only oddball, as it is a record of how many times the pokemon is mentioned in *other* pokemon's entries. This will be helpful for comparison later. Lastly, every entry is stored as a single string, separated into chunks by the newline character. 
+
+
+## Analysis of Base Stat Totals
+```{python}
+# create a transformed data set with BST as unique rows and count is new column
+pokeDexBST = pokeDex.groupby('BST').agg(
+    count = ('BST', 'size')
+)
+pokeDexBST['BST'] = pokeDex['BST']
+
+fig1 = px.histogram(pokeDexBST, x= 'BST', y= 'count',
+    template='plotly_white', nbins= 30, title= "BST Distribution for all Pokemon")
+fig1.show()
+```
+
+In the histogram, you can see the general distribution of base stats across all pokemon. We might swiftly infer that their are three main groups in the Pokemon food chain: Those below 400, those between 400 and 560, and those higher than 560, and that we can find the hunters and prey from observing these lists. However, the actual data we collected shows an oddly different story. But first, what about those entries that mention trucks?
+
+
+## Analysis of Truck Entries
+```{python}
+# create subset of data where trucks mentioned > 0
+pokeDexTrucks = pokeDex.loc[pokeDex['Truck_Mention'] > 0, ['Name', 'BST', 'Truck_Mention', 'Dex_Entries']]
+
+# head, display hist chart for count 
+print(f"Number of Pokemon with Trucks in Pokedex: {pokeDexTrucks['Name'].count().sum()}")
+print(f"% of all Entries: {pokeDexTrucks['Name'].count().sum()/1024}")
+```
+
+Of the 1024 pokemon, 15 unique species reference their strength through measures involving trucks. 1% may not seem like much but it certainly is more than I expected. Take a look at a few of the ones above. They are actually quite funny relations. 
+
+```{python}
+# print 1st entry of each as example of some odd examples
+pokeDexTrucks["first_truck_line"] = (
+    pokeDexTrucks["Dex_Entries"]
+    .str.split("\n")
+    .apply(lambda x: next((s for s in x if "truck" in s.lower()), None))
+)
+print("Some Entries about Trucks")
+for row in pokeDexTrucks.head(3).itertuples():
+    print(f"{row.Name}: {row.first_truck_line}")
+for row in pokeDexTrucks.tail(4).itertuples():
+    print(f"{row.Name}: {row.first_truck_line}")
+```
+
+Now below is histogram that relates individual BST to the number of track mentions to see if there is some kind of relation between the two. And it does appear that stronger Pokemon are usually the ones that have a relation to trucks. But then you have some like Chespin, whose own entry mentions it can tank a hit from a truck, despite such a low BST of only 313. So regardless, the whole metric is quite funny to visualize.
+
+```{python}
+px.histogram(pokeDexTrucks, x= 'BST', y= 'Truck_Mention', nbins= 30, title= "Relation between BST and Count of Trucks in Pokedex")
+```
+```{python}
+print("Chespin Entries")
+print(
+    pokeDex.loc[
+        pokeDex["Name"] == 'chespin',
+        "Dex_Entries"
+    ].iloc[0]
+)
+print()
+print(f"Chespin BST: {pokeDex.loc[pokeDex["Name"] == 'chespin',"BST"].iloc[0]}")
+```
+
+
+## Analysis of Pokemon Ecological Tendancies
+Now let's look at what I actually find interesting: Pokemon interactions with the subject of food!
+
+```{python}
+pokeDexFood = pokeDex.loc[pokeDex['Food_Mention'] > 2, ['Name','BST', 'Food_Mention', 'Dex_Entries']].sort_values('Food_Mention', ascending= True)
+
+pokeDexBSTFood = pokeDex.groupby('BST').agg(
+    count = ('BST', 'size'),
+    food = ('Food_Mention', 'size')
+)
+pokeDexBSTFood['BST'] = pokeDexFood['BST']
+
+pokeDexHunt = pokeDex.loc[pokeDex['Dex_Mention'] > 2, ['Name','BST', 'Dex_Mention', 'Dex_Entries']].sort_values('Dex_Mention', ascending= True)
+
+```
+```{python}
+fig2 = px.histogram(pokeDexFood, x="Name", y="Food_Mention", 
+             title="Counts of Food Topics in Pokedex Entries", template= 'plotly_white')
+fig2.show()     # Food mentions sorted by count
+```
+
+The first figure looks at a count of all food mentions in all Pokemon. We've sorted it so the largest and smallest can be seen. Now, if our intention was to find the Pokemon whose dex entries relate to them either being a predator or prey, we would expect that the top three greatest mentions would be our prime suspects. If you zoom in, those three Pokemon are Delibird, Kabutops, and Spinarak. The first is a small bird, the second a large crustacean, and the third a small spider. Surely these are either great predators or timid prey right?
+
+Well, it appears that the selection of our data may need some refinement. Here are the entries for those three Pokemon. 
+
+```{python}
+for entry_group in pokeDexFood["Dex_Entries"]:
+    for entry in entry_group.split("\n"):
+        if 'delibird' in entry.lower():
+            print(entry)
+print()
+for entry_group in pokeDexFood["Dex_Entries"]:
+    for entry in entry_group.split("\n"):
+        if 'kabutops' in entry.lower():
+            print(entry)
+print()
+for entry_group in pokeDexFood["Dex_Entries"]:
+    for entry in entry_group.split("\n"):
+        if 'spinarak' in entry.lower():
+            print(entry)
+```
+
+Delibird's entries are about food it carries, not it being a hunter! Only one entry has any reference to the subject, which discusses Delibird handing people Bug-type Pokemon as it sees them as food. Interesting, but not a top of the food chain predator. Spinarak is also similarly disappointing. Apparently its entries don't change much across the games. Kabutops is what we were expecting though! Such a viscious killer when it was alive. So maybe our other figures will provide some insight.
+
+```{python}
+fig3 = px.histogram(pokeDexBSTFood, x="BST", y="food", 
+             title="Relation between BST and Mentions of Food in Pokedex Entries", template= 'plotly_white')
+fig3.show()     # Food mentions by BST (notice distinct groups??)
+```
+
+Now this is interesting! We haven't run any analysis so we can't be sure but compare this histogram to our histogram of BST Distribution. The mentions of food and their BST seem to fall into the same three groups we noticed before! It could be true that these groups represent the three major prey/preadtor groups in the Pokemon world. So perhaps further analysis should be performed on those relations
+
+```{python}
+fig4 = px.histogram(pokeDexHunt.sort_values('BST', ascending= True), x="BST", y= "Dex_Mention", template= 'plotly_white', title= "Mentions in another Dex Entry by BST", nbins= 60)
+fig4.show()     # Dex Mentions by BST
+```
+
+The last figure I wanted to look at BST to dex mentions. The hypothesis was that if a pokemon was referenced multiple times outside their own entry, then it would be a prey or predator. The histogram however is inconclusive. There are seemingly more mentions of in the groups specified but a look at the pokemon themselves shows a rather equal distribution between mentions, despite being ordered by BST. 
+
+```{python}
+fig5 = px.histogram(pokeDexHunt.sort_values('BST', ascending= True), x="Name", y= "Dex_Mention", template= 'plotly_white', title= "Mentions in another Dex Entry by Name", nbins= 60)
+fig5.show()     # Dex Mentions by BST
+```
+
+That said, looking at shellder's entries (that huge spike), it seems it truly is a predator despite its low BST.
+
+```{python}
+# Looking at entries of dex mentions. There are mentions of eating that aren't recorded in Food_Mentions, so some improvement is needed to better capture the data. Perhaps a project someone else could take on. 
+print("Entries that contain Shellder")
+for entry_group in pokeDexFood["Dex_Entries"]:
+    for entry in entry_group.split("\n"):
+        if 'shellder' in entry.lower():
+            print(entry)
+```
+
+
+# Limitations and Future Research
+This exploration has proven one thing: An analysis solely looking for the inclusion of words is not powerful enough to answer the question of pokemon ecological interactions. Much of the context of the words is lost. Further analysis by someone with more time than I do could create a more robust textual analysis to better relate pokemon to their predator / prey groups, but for now this EDA will suffice.
